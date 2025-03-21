@@ -1,37 +1,70 @@
-# 🔓 EIP-7702 Proxy Exploit PoC
+# EIP-7702 Proxy Vulnerability PoC
 
-This repo contains a working proof-of-concept (PoC) showing how an attacker can take control of an `EIP7702Proxy` smart account by bypassing validator logic and setting a malicious implementation. This was developed for the [Base EIP-7702 audit competition](https://github.com/base/eip-7702-proxy).
+This repo showcases a proof-of-concept (PoC) exploit for a critical issue in the `EIP7702Proxy` contract found in the [`base/eip-7702-proxy` repository](https://github.com/base/eip-7702-proxy).
 
----
-
-##  What’s This About?
-
-EIP-7702 introduces a powerful concept: letting EOAs become smart contract wallets. But with that power comes risk. The `EIP7702Proxy` is designed to securely handle smart account upgrades — but under the hood, there's a way to hijack that process.
-
-This PoC shows how a malicious actor can:
-
-- Deploy a proxy with a fake validator
-- Forge a signature (or use a real one with a spoofed validator)
-- Manually set the implementation storage slot
-- Hijack the proxy and run arbitrary logic (e.g., `evilFunction()`)
+**Issue Summary:**  
+A malicious actor can bypass the validator check and set a compromised implementation, thereby taking full control of wallets that rely on this proxy for security.
 
 ---
 
-##  PoC Structure
+## ⚠️ Judges: Steps to Reproduce
 
-This repo has two main files:
+Follow these instructions **within the official `base/eip-7702-proxy` codebase** to confirm the exploit:
 
-- `test/exploit/Exploit_SetImplementation.t.sol`: The test that executes the exploit end-to-end.
-- `test/mocks/MockImplementation.sol`: A set of mock contracts used for testing, including a malicious one with an `evilFunction()` that prints `"PWNED"`.
-
----
-
-##  How to Run It
-
-Make sure you have [Foundry](https://book.getfoundry.sh/getting-started/installation) installed.
-
-Then:
+### 1. Clone & Build the Original Audit Repo
 
 ```bash
-forge install
+git clone https://github.com/base/eip-7702-proxy.git
+cd eip-7702-proxy
+git checkout 371a141ed738a0328b356092a8df1bed0e1d9856
+forge update && forge install
+forge build
+```
+
+### 2. Add the PoC Tests
+
+Copy over the exploit and mocks folders from this PoC repo into the test/ folder of the official code:
+
+```bash
+# assuming your PoC repo is next to the eip-7702-proxy folder
+cp -r ../eip7702-poc/exploit test/
+cp -r ../eip7702-poc/mocks test/
+```
+
+Your test/ directory in the original repo should look like:
+
+```
+test
+├── exploit
+│   └── Exploit_SetImplementation.t.sol
+├── mocks
+│   ├── MockImplementation.sol
+│   └── MockMaliciousImplementation.sol
+...
+```
+
+### 3. Run the Exploit Test
+
+```bash
 forge test --match-test test_exploitWithBadValidator_setsMaliciousImpl -vvvv
+```
+
+Expected Output:
+
+```
+Implementation set to: 0x...
+Exploit successful! Proxy now delegates to malicious implementation.
+PWNED
+```
+
+## ℹ️ Vulnerability Explanation
+
+Because the validator is user-supplied, an attacker can simply return "success" for any implementation. This undermines the intended security of `setImplementation()`—the proxy effectively trusts whatever validator says is valid.
+
+### Impact:
+- **High** – Attackers can hijack the smart account's logic.
+
+### Likelihood:
+- **High** – Needs only a validator contract returning success plus a valid EOA signature.
+
+*Use responsibly.*
